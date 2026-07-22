@@ -2,7 +2,7 @@
 
 A production-style URL shortener that turns Redis into the workhorse behind every hot-path operation — caching, ID generation, click counting, and a live leaderboard — while MySQL stays the single durable system of record.
 
-![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.2-brightgreen) ![Redis](https://img.shields.io/badge/Redis-7-red) ![MySQL](https://img.shields.io/badge/MySQL-8-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED) ![Testcontainers](https://img.shields.io/badge/Testcontainers-integration%20tests-2496ED) ![License](https://img.shields.io/badge/License-MIT-lightgrey)
+![Java](https://img.shields.io/badge/Java-25-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.6-brightgreen) ![Redis](https://img.shields.io/badge/Redis-7-red) ![MySQL](https://img.shields.io/badge/MySQL-8-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED) ![Testcontainers](https://img.shields.io/badge/Testcontainers-integration%20tests-2496ED) ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
 
@@ -241,7 +241,7 @@ Single table, MySQL, `ddl-auto: update` (no Flyway/Liquibase — kept intentiona
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Language / runtime | Java 21, Spring Boot 3.3.2 | application framework |
+| Language / runtime | Java 25, Spring Boot 4.0.6 | application framework |
 | Web | Spring Web (MVC) | REST controllers |
 | Persistence | Spring Data JPA + Hibernate, MySQL 8 (`mysql-connector-j`) | durable system of record |
 | Cache / data structures | Spring Data Redis (`StringRedisTemplate`, Lettuce client) | cache-aside, counters, sets, ZSET |
@@ -326,10 +326,11 @@ Lettuce is the default Spring Boot Redis client; pooling connections avoids per-
 
 ```yaml
   jackson:
-    serialization:
-      write-dates-as-timestamps: false
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
 ```
-`Instant` fields (`createdAt`, `expiresAt`) serialize as ISO-8601 strings in JSON responses instead of raw epoch millis arrays — much more readable in API responses/tests.
+`Instant` fields (`createdAt`, `expiresAt`) serialize as ISO-8601 strings in JSON responses instead of raw epoch millis arrays — much more readable in API responses/tests. (Spring Boot 4 ships Jackson 3, which moved `WRITE_DATES_AS_TIMESTAMPS` from `SerializationFeature` to `DateTimeFeature`, so the property moved from `spring.jackson.serialization.*` to `spring.jackson.datatype.datetime.*`; Jackson 3 also defaults to ISO-8601 already, so this is now mostly documentation of intent.)
 
 ```yaml
 management:
@@ -394,9 +395,9 @@ Keeps the app's own logs informative while silencing Redis client chatter (conne
 
 | Path | Why it exists |
 |---|---|
-| `Dockerfile` | Multi-stage build: Maven builds the jar in a throwaway build stage; the runtime stage is a minimal `eclipse-temurin:21-jre-alpine` image running as a non-root `spring` user, with a `HEALTHCHECK` hitting `/actuator/health`. |
+| `Dockerfile` | Multi-stage build: Maven builds the jar in a throwaway build stage; the runtime stage is a minimal `eclipse-temurin:25-jre-alpine` image running as a non-root `spring` user, with a `HEALTHCHECK` hitting `/actuator/health`. |
 | `docker-compose.yml` | Wires up `mysql`, `redis`, `redis-commander` (inspection UI), and the `app` itself on one bridge network, with health-check-gated `depends_on` so the app doesn't start before its dependencies are ready. |
-| `pom.xml` | Maven build: Spring Boot 3.3.2 parent, Java 21, web/JPA/Redis/validation/actuator starters, MySQL driver, Testcontainers BOM for integration tests. |
+| `pom.xml` | Maven build: Spring Boot 4.0.6 parent, Java 25, web/JPA/Redis/validation/actuator starters (plus `spring-boot-starter-webmvc-test` for MockMvc in tests), MySQL driver, Testcontainers BOM for integration tests. |
 | `.dockerignore` / `.gitignore` | Keep `target/`, IDE files, and the Maven wrapper jar out of the Docker build context and git history. |
 | `src/main/resources/application.yml` | All runtime configuration — see section 6. |
 | `UrlShortenerServiceApplication.java` | Entry point; `@EnableScheduling` turns on the click-flush job, `@ConfigurationPropertiesScan` picks up `UrlShortenerProperties` without needing an explicit `@EnableConfigurationProperties`. |
@@ -424,7 +425,7 @@ Keeps the app's own logs informative while silencing Redis client chatter (conne
 ### Prerequisites
 
 - Docker + Docker Compose
-- (Optional, for local dev outside Docker) Java 21 and Maven 3.9+
+- (Optional, for local dev outside Docker) Java 25 and Maven 3.9+
 
 ### Run everything with Docker Compose
 
@@ -595,8 +596,8 @@ The integration test spins up `mysql:8.0` and `redis:7-alpine` containers via `@
 
 ### `Dockerfile` (multi-stage)
 
-- **Stage 1 (`build`)**: `maven:3.9.8-eclipse-temurin-21`. Copies `pom.xml` first and runs `dependency:go-offline` before copying source, so dependency downloads are cached in their own Docker layer and only re-run when `pom.xml` changes — not on every source edit. Then `mvn clean package -DskipTests` builds the jar (tests run separately in CI/locally, not as part of the image build).
-- **Stage 2 (`runtime`)**: `eclipse-temurin:21-jre-alpine` — JRE only, no JDK/Maven, for a small final image. Creates and switches to a non-root `spring` user (`addgroup`/`adduser`) before copying in the jar, so the container never runs as root. Exposes `8080`. `HEALTHCHECK` polls `/actuator/health` every 15s and greps for `"status":"UP"`. `JAVA_OPTS` is an empty-by-default env var so JVM flags (heap size, GC, etc.) can be injected at `docker run`/Compose time without rebuilding the image.
+- **Stage 1 (`build`)**: `maven:3.9-eclipse-temurin-25`. Copies `pom.xml` first and runs `dependency:go-offline` before copying source, so dependency downloads are cached in their own Docker layer and only re-run when `pom.xml` changes — not on every source edit. Then `mvn clean package -DskipTests` builds the jar (tests run separately in CI/locally, not as part of the image build).
+- **Stage 2 (`runtime`)**: `eclipse-temurin:25-jre-alpine` — JRE only, no JDK/Maven, for a small final image. Creates and switches to a non-root `spring` user (`addgroup`/`adduser`) before copying in the jar, so the container never runs as root. Exposes `8080`. `HEALTHCHECK` polls `/actuator/health` every 15s and greps for `"status":"UP"`. `JAVA_OPTS` is an empty-by-default env var so JVM flags (heap size, GC, etc.) can be injected at `docker run`/Compose time without rebuilding the image.
 
 ### `docker-compose.yml`
 
