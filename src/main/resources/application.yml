@@ -1,0 +1,80 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: url-shortener-service
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:urlshortener}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:urlshortener}
+    password: ${DB_PASSWORD:urlshortener}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  health:
+    redis:
+      enabled: true
+
+# ---------------------------------------------------------------------------
+# Application-specific configuration. All Redis behaviour (cache TTL, rate
+# limiting, ID generation offset, click-flush cadence, leaderboard size) is
+# tunable here without touching code.
+# ---------------------------------------------------------------------------
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  cache:
+    url-ttl-seconds: 3600          # how long a resolved short-code -> URL mapping lives in Redis
+  id-generator:
+    sequence-key: "url:id:sequence"
+    offset: 100000                  # ensures generated codes are never trivially short (e.g. "1")
+  rate-limit:
+    enabled: true
+    max-requests: 20                # max short-URL creations
+    window-seconds: 60              # ...per rolling window, per client IP
+  click-tracking:
+    flush-interval-ms: 15000        # how often pending Redis click counters are flushed into MySQL
+    leaderboard-size: 10            # default size for the "popular URLs" endpoint
+
+logging:
+  level:
+    com.medha.urlshortenerservice: INFO
+    org.springframework.data.redis: WARN

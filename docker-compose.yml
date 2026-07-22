@@ -1,0 +1,88 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: url-shortener-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: urlshortener
+      MYSQL_USER: urlshortener
+      MYSQL_PASSWORD: urlshortener
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - url-shortener-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: url-shortener-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - url-shortener-net
+
+  # Lightweight open-source web UI for inspecting Redis keys while learning
+  # the caching/counter/leaderboard patterns this service uses.
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: url-shortener-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - url-shortener-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: url-shortener-app
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: urlshortener
+      DB_USERNAME: urlshortener
+      DB_PASSWORD: urlshortener
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      APP_BASE_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - url-shortener-net
+
+networks:
+  url-shortener-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
