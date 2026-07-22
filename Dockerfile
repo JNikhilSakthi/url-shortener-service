@@ -2,7 +2,7 @@
 # Stage 1: build the application with Maven (dependencies cached separately
 # from source so code-only changes don't re-download the internet).
 # ---------------------------------------------------------------------------
-FROM maven:3.9.8-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
 
 COPY pom.xml .
@@ -14,7 +14,7 @@ RUN mvn -B clean package -DskipTests
 # ---------------------------------------------------------------------------
 # Stage 2: minimal runtime image
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 WORKDIR /app
 
 RUN addgroup -S spring && adduser -S spring -G spring

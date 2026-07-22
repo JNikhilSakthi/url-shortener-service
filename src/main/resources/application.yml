@@ -39,8 +39,14 @@ spring:
           max-wait: 2000ms
 
   jackson:
-    serialization:
-      write-dates-as-timestamps: false
+    # Spring Boot 4 / Jackson 3: WRITE_DATES_AS_TIMESTAMPS moved from
+    # SerializationFeature to DateTimeFeature, so the old
+    # spring.jackson.serialization.write-dates-as-timestamps key no longer
+    # binds (Jackson 3 also defaults to ISO-8601 strings already, so this is
+    # now mostly documentation of intent).
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
 
 management:
   endpoints:
